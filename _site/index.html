@@ -6,6 +6,10 @@
     <title>RNE Explorer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -30,7 +34,7 @@
         /* ── HERO ────────────────────────────────── */
         .hero {
             background: var(--ink); color: var(--paper);
-            padding: 72px 24px 96px;
+            padding: 60px 24px 80px;
             text-align: center; position: relative;
         }
         .hero::after {
@@ -55,6 +59,22 @@
             font-size: 14px; font-weight: 300;
             color: rgba(245,242,238,0.5);
             max-width: 380px; margin: 0 auto; line-height: 1.7;
+        }
+
+        /* ── TABS ────────────────────────────────── */
+        .tabs {
+            display: flex; justify-content: center; gap: 32px;
+            margin-top: -10px; margin-bottom: 40px; position: relative; z-index: 100;
+        }
+        .tab-btn {
+            background: none; border: none; font-family: 'DM Sans', sans-serif;
+            font-size: 15px; font-weight: 500;
+            cursor: pointer; position: relative; padding: 12px 0;
+            transition: color .2s;
+        }
+        .tab-btn.active::after {
+            content: ''; position: absolute; bottom: 4px; left: 0; right: 0;
+            height: 2px; background: var(--accent); border-radius: 2px;
         }
 
         /* ── SEARCH ──────────────────────────────── */
@@ -89,6 +109,46 @@
         #search-btn:active { transform: scale(.97); }
         #search-btn:disabled { opacity: .4; cursor: not-allowed; }
 
+        /* ── DASHBOARD ───────────────────────────── */
+        #dashboard-view {
+            max-width: 1000px; margin: 0 auto 100px; padding: 0 20px;
+            animation: fadeUp .4s ease both;
+        }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin-bottom: 32px;
+        }
+        .stat-card {
+            background: var(--white); padding: 24px; border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(13,13,13,0.04);
+            border: 1px solid var(--border);
+        }
+        .stat-label {
+            font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+        }
+        .stat-value {
+            font-family: 'DM Serif Display', serif; font-size: 2rem; color: var(--ink);
+        }
+        .chart-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px; margin-bottom: 32px;
+        }
+        .chart-container {
+            background: var(--white); padding: 24px; border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(13,13,13,0.04);
+            border: 1px solid var(--border);
+        }
+        .chart-container h3 {
+            font-family: 'DM Serif Display', serif; font-size: 1.25rem; margin-bottom: 20px;
+        }
+        .map-wrapper {
+            background: var(--white); padding: 12px; border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(13,13,13,0.04);
+            border: 1px solid var(--border); margin-bottom: 32px;
+        }
+        #map { height: 500px; border-radius: 12px; z-index: 10; }
+
         /* ── STATUS ──────────────────────────────── */
         #status {
             text-align: center; font-size: 13px; color: var(--muted);
@@ -104,7 +164,8 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* ── OUTPUT ──────────────────────────────── */
-        #output { max-width: 760px; margin: 0 auto 100px; padding: 0 20px; }
+        #search-view { max-width: 760px; margin: 0 auto 100px; padding: 0 20px; }
+        #output { }
 
         /* ── CARD ────────────────────────────────── */
         .card {
@@ -226,42 +287,103 @@
     <p>Données officielles RNE — SIREN, statuts, adresses et établissements.</p>
 </header>
 
-<div class="search-wrap">
-    <div class="search-box">
-        <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input type="text" id="search-input" autocomplete="off" placeholder="Nom d'entreprise ou SIREN…" disabled>
-        <button id="search-btn" disabled>Rechercher</button>
+<nav class="tabs">
+    <button class="tab-btn active" data-tab="search">Recherche</button>
+    <button class="tab-btn" data-tab="dashboard">Analyses & Carte</button>
+</nav>
+
+<div id="search-view">
+    <div class="search-wrap">
+        <div class="search-box">
+            <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text" id="search-input" autocomplete="off" placeholder="Nom d'entreprise ou SIREN…" disabled>
+            <button id="search-btn" disabled>Rechercher</button>
+        </div>
+    </div>
+
+    <div id="status">
+        <div class="spinner"></div>
+        <span>Chargement de DuckDB…</span>
+    </div>
+
+    <div id="output">
+        <div class="empty-state">
+            <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            </svg>
+            <p>Recherchez une entreprise pour afficher sa fiche.</p>
+        </div>
     </div>
 </div>
 
-<div id="status">
-    <div class="spinner"></div>
-    <span>Chargement de DuckDB…</span>
-</div>
+<div id="dashboard-view" style="display:none;">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Unités Légales</div>
+            <div id="stat-ul" class="stat-value">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Établissements</div>
+            <div id="stat-et" class="stat-value">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Entrepreneurs Ind.</div>
+            <div id="stat-ind" class="stat-value">—</div>
+        </div>
+    </div>
 
-<div id="output">
-    <div class="empty-state">
-        <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-        </svg>
-        <p>Recherchez une entreprise pour afficher sa fiche.</p>
+    <div class="chart-row">
+        <div class="chart-container">
+            <h3>Top 10 Formes Juridiques</h3>
+            <div style="height: 300px;"><canvas id="chart-legal"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <h3>Répartition des Statuts</h3>
+            <div style="height: 300px;"><canvas id="chart-status"></canvas></div>
+        </div>
+    </div>
+
+    <div class="map-wrapper">
+        <h3 style="padding: 12px 12px 0; font-family: 'DM Serif Display', serif;">Carte de densité des établissements (échantillon 50k)</h3>
+        <p style="padding: 0 12px 12px; font-size: 13px; color: var(--muted);">Répartition géographique sur le territoire.</p>
+        <div id="map"></div>
     </div>
 </div>
 
 <script type="module">
-import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.0/+esm';
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm';
 
 const statusEl    = document.getElementById('status');
 const searchBtn   = document.getElementById('search-btn');
 const searchInput = document.getElementById('search-input');
 const outputEl    = document.getElementById('output');
+const searchView  = document.getElementById('search-view');
+const dashboardView = document.getElementById('dashboard-view');
+const tabBtns     = document.querySelectorAll('.tab-btn');
+
 let db, conn;
+let dashboardLoaded = false;
+let map, heatLayer;
 
 /* ── Utils ─────────────────────────────────── */
 const esc  = s => s ? String(s).replace(/'/g, "''") : '';
 const dash = v => (v === null || v === undefined || v === '') ? '—' : v;
+const fmtNum = n => new Intl.NumberFormat('fr-FR').format(n);
+
+const LEGAL_LABELS = {
+    '1000': 'Entr. Individuel',
+    '5202': 'SNC',
+    '5499': 'SAS',
+    '6540': 'SCI',
+    '5710': 'SASU',
+    '6598': 'EARL',
+    '6599': 'Autre Société Civile',
+    '3220': 'Exploitant Agricole',
+    '9110': 'Syndicat de Copro',
+    '2110': 'Indivision Entre Particuliers'
+};
 
 function getSearchSQL(v, limit = 8) {
     const s = esc(v);
@@ -307,8 +429,135 @@ function setStatus(msg, loading = false) {
         : `<span>${msg}</span>`;
 }
 
+/* ── Dashboard Logic ───────────────────────── */
+async function loadDashboard() {
+    if (dashboardLoaded) return;
+    setStatus('Chargement des analyses…', true);
+    
+    try {
+        const [statsUl, statsEt, statsInd, legalRes, statusRes, mapRes] = await Promise.all([
+            conn.query("SELECT count(*) as c FROM 'unites_legales.parquet'"),
+            conn.query("SELECT count(*) as c FROM 'etablissements.parquet'"),
+            conn.query("SELECT count(*) as c FROM 'unites_legales.parquet' WHERE est_entrepreneur_individuel = 'True'"),
+            conn.query(`SELECT nature_juridique, count(*) as c FROM 'unites_legales.parquet' 
+                        WHERE nature_juridique IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 10`),
+            conn.query(`SELECT 
+                sum(CASE WHEN est_ess = 'True' THEN 1 ELSE 0 END) as ess,
+                sum(CASE WHEN est_societe_mission = 'O' THEN 1 ELSE 0 END) as mission,
+                sum(CASE WHEN est_association = 'True' THEN 1 ELSE 0 END) as assoc,
+                sum(CASE WHEN est_organisme_formation = 'True' THEN 1 ELSE 0 END) as formation
+                FROM 'unites_legales.parquet'`),
+            conn.query("SELECT latitude, longitude FROM 'etablissements.parquet' WHERE latitude IS NOT NULL AND longitude IS NOT NULL USING SAMPLE 50000 ROWS")
+        ]);
+
+        const getVal = (res) => {
+            const rows = res.toArray().map(r => r.toJSON());
+            if (rows.length === 0) return 0;
+            // Access by alias 'c' or the first available property
+            return rows[0].c !== undefined ? rows[0].c : Object.values(rows[0])[0];
+        };
+
+        document.getElementById('stat-ul').textContent  = fmtNum(getVal(statsUl));
+        document.getElementById('stat-et').textContent  = fmtNum(getVal(statsEt));
+        document.getElementById('stat-ind').textContent = fmtNum(getVal(statsInd));
+
+        renderLegalChart(legalRes.toArray().map(r => r.toJSON()));
+        renderStatusChart(statusRes.toArray().map(r => r.toJSON())[0]);
+        renderMap(mapRes.toArray().map(r => r.toJSON()));
+
+        dashboardLoaded = true;
+        setStatus('');
+    } catch (err) {
+        setStatus(`Erreur dashboard : ${err.message}`);
+        console.error(err);
+    }
+}
+
+function renderLegalChart(data) {
+    const ctx = document.getElementById('chart-legal').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(r => LEGAL_LABELS[r.nature_juridique] || r.nature_juridique),
+            datasets: [{
+                label: 'Nombre d\'unités',
+                data: data.map(r => Number(r.c)),
+                backgroundColor: '#c8522a',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false } }, y: { grid: { display: false } } }
+        }
+    });
+}
+
+function renderStatusChart(data) {
+    const ctx = document.getElementById('chart-status').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['ESS', 'Soc. à mission', 'Assoc.', 'Org. Formation'],
+            datasets: [{
+                data: [Number(data.ess), Number(data.mission), Number(data.assoc), Number(data.formation)],
+                backgroundColor: ['#c8522a', '#2a4a8a', '#276b2c', '#b03020'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            cutout: '65%'
+        }
+    });
+}
+
+function renderMap(coords) {
+    if (!map) {
+        map = L.map('map').setView([46.6, 2.2], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+        }).addTo(map);
+    }
+
+    const points = coords.map(c => [parseFloat(c.latitude), parseFloat(c.longitude), 0.5]);
+    if (heatLayer) map.removeLayer(heatLayer);
+    heatLayer = L.heatLayer(points, {
+        radius: 12,
+        blur: 15,
+        maxZoom: 10,
+        gradient: {0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1: 'red'}
+    }).addTo(map);
+}
+
+function initTabs() {
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            if (tab === 'search') {
+                searchView.style.display = 'block';
+                dashboardView.style.display = 'none';
+            } else {
+                searchView.style.display = 'none';
+                dashboardView.style.display = 'block';
+                loadDashboard();
+                setTimeout(() => map && map.invalidateSize(), 100);
+            }
+        });
+    });
+}
+
 /* ── Init ──────────────────────────────────── */
 async function init() {
+    initTabs();
     try {
         const bundles = duckdb.getJsDelivrBundles();
         const bundle  = await duckdb.selectBundle(bundles);
@@ -322,7 +571,7 @@ async function init() {
         const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
         await db.registerFileURL('unites_legales.parquet', `${base}/unites_legales.parquet`, duckdb.DuckDBDataProtocol.HTTP, false);
         await db.registerFileURL('etablissements.parquet', `${base}/etablissements.parquet`, duckdb.DuckDBDataProtocol.HTTP, false);
-        // Warm up
+        
         await conn.query("SELECT 1 FROM 'unites_legales.parquet' LIMIT 0");
         await conn.query("SELECT 1 FROM 'etablissements.parquet' LIMIT 0");
 
@@ -424,10 +673,9 @@ function render(ul, etabs) {
     const name  = ul.nom_complet || 'Nom inconnu';
     const siege = etabs.find(e => e.est_siege) || etabs[0] || null;
 
-    // Key info cells — only show non-empty ones
     const cells = [
         { label: 'SIREN',            value: fmtSiren(ul.siren) },
-        { label: 'Nature juridique', value: dash(ul.nature_juridique) },
+        { label: 'Nature juridique', value: LEGAL_LABELS[ul.nature_juridique] || dash(ul.nature_juridique) },
         { label: 'Activité (NAF)',   value: dash(ul.activite_principale) },
         { label: 'SIRET siège',      value: siege ? fmtSiret(siege.siret) : '—' },
         { label: 'Tranche effectif', value: dash(ul.tranche_effectifs) },

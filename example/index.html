@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RNE Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --ink:    #0d0d0d;
+            --paper:  #f5f2ee;
+            --white:  #ffffff;
+            --accent: #c8522a;
+            --muted:  #7a7570;
+            --border: rgba(13,13,13,0.09);
+            --ok-bg:  #e8f5e9; --ok-fg: #276b2c;
+            --ko-bg:  #fcecea; --ko-fg: #b03020;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--paper);
+            color: var(--ink);
+            min-height: 100vh;
+        }
+
+        /* ── HERO ────────────────────────────────── */
+        .hero {
+            background: var(--ink); color: var(--paper);
+            padding: 72px 24px 96px;
+            text-align: center; position: relative;
+        }
+        .hero::after {
+            content: ''; position: absolute;
+            bottom: -1px; left: 0; right: 0; height: 56px;
+            background: var(--paper);
+            clip-path: ellipse(55% 100% at 50% 100%);
+        }
+        .hero-eyebrow {
+            display: inline-block; font-size: 11px; font-weight: 500;
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--accent); border: 1px solid rgba(200,82,42,0.4);
+            padding: 4px 14px; border-radius: 100px; margin-bottom: 20px;
+        }
+        .hero h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: clamp(2.4rem, 5.5vw, 4.4rem);
+            line-height: 1.06; letter-spacing: -0.02em; margin-bottom: 14px;
+        }
+        .hero h1 em { font-style: italic; color: var(--accent); }
+        .hero p {
+            font-size: 14px; font-weight: 300;
+            color: rgba(245,242,238,0.5);
+            max-width: 380px; margin: 0 auto; line-height: 1.7;
+        }
+
+        /* ── SEARCH ──────────────────────────────── */
+        .search-wrap {
+            max-width: 620px; margin: -32px auto 52px;
+            padding: 0 20px; position: relative; z-index: 50;
+        }
+        .search-box {
+            display: flex; align-items: center;
+            background: var(--white); border-radius: 14px;
+            box-shadow: 0 8px 36px rgba(13,13,13,0.13), 0 2px 6px rgba(13,13,13,0.05);
+            position: relative;
+        }
+        .search-ico {
+            width: 18px; height: 18px; margin-left: 18px;
+            flex-shrink: 0; color: var(--muted);
+        }
+        #search-input {
+            flex: 1; border: none; outline: none;
+            padding: 17px 14px;
+            font-family: 'DM Sans', sans-serif; font-size: 15px;
+            color: var(--ink); background: transparent;
+        }
+        #search-input::placeholder { color: #bab5af; }
+        #search-btn {
+            background: var(--accent); color: #fff; border: none;
+            padding: 11px 26px; margin: 7px; border-radius: 9px;
+            font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+            cursor: pointer; transition: background .18s, transform .1s; flex-shrink: 0;
+        }
+        #search-btn:hover  { background: #b04422; }
+        #search-btn:active { transform: scale(.97); }
+        #search-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+        /* ── STATUS ──────────────────────────────── */
+        #status {
+            text-align: center; font-size: 13px; color: var(--muted);
+            height: 28px; display: flex; align-items: center;
+            justify-content: center; gap: 8px; margin-bottom: 16px;
+        }
+        .spinner {
+            width: 15px; height: 15px; flex-shrink: 0;
+            border: 2px solid rgba(13,13,13,0.08);
+            border-top-color: var(--accent);
+            border-radius: 50%; animation: spin .65s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── OUTPUT ──────────────────────────────── */
+        #output { max-width: 760px; margin: 0 auto 100px; padding: 0 20px; }
+
+        /* ── CARD ────────────────────────────────── */
+        .card {
+            background: var(--white); border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(13,13,13,0.06);
+            overflow: hidden; margin-bottom: 20px;
+            animation: fadeUp .35s ease both;
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .card-head {
+            padding: 28px 28px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: flex-start;
+            justify-content: space-between; gap: 16px; flex-wrap: wrap;
+        }
+        .card-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.75rem; line-height: 1.1;
+            letter-spacing: -0.02em; color: var(--ink);
+        }
+        .card-siren {
+            font-size: 13px; color: var(--muted);
+            font-weight: 300; margin-top: 5px; letter-spacing: 0.04em;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 11px; border-radius: 100px;
+            font-size: 12px; font-weight: 500; flex-shrink: 0;
+        }
+        .badge::before {
+            content: ''; width: 6px; height: 6px;
+            border-radius: 50%; flex-shrink: 0;
+        }
+        .badge-ok { background: var(--ok-bg); color: var(--ok-fg); }
+        .badge-ok::before { background: var(--ok-fg); }
+        .badge-ko { background: var(--ko-bg); color: var(--ko-fg); }
+        .badge-ko::before { background: var(--ko-fg); }
+
+        /* Address row */
+        .addr-block {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex; gap: 12px; align-items: flex-start;
+        }
+        .addr-ico { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+        .addr-label {
+            font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 3px;
+        }
+        .addr-value { font-size: 14px; color: var(--ink); line-height: 1.5; }
+
+        /* Info grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            border-bottom: 1px solid var(--border);
+        }
+        @media (min-width: 600px) { .info-grid { grid-template-columns: repeat(3, 1fr); } }
+
+        .info-cell {
+            padding: 16px 22px;
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .info-cell:nth-child(2n) { border-right: none; }
+        @media (min-width: 600px) {
+            .info-cell:nth-child(2n)  { border-right: 1px solid var(--border); }
+            .info-cell:nth-child(3n)  { border-right: none; }
+        }
+        .info-label {
+            font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+        }
+        .info-value { font-size: 14px; color: var(--ink); line-height: 1.4; }
+
+        /* Etablissements */
+        .section-title {
+            font-size: 11px; font-weight: 500; letter-spacing: 0.12em;
+            text-transform: uppercase; color: var(--muted);
+            padding: 18px 24px 6px;
+        }
+        .etab-list { padding: 0 12px 14px; }
+        .etab-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 12px; border-radius: 8px; font-size: 13px;
+            flex-wrap: wrap; transition: background .12s;
+        }
+        .etab-item:hover { background: var(--paper); }
+        .etab-siret { font-weight: 500; flex-shrink: 0; letter-spacing: 0.03em; }
+        .etab-addr  {
+            flex: 1; min-width: 0; color: var(--muted); font-weight: 300;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .etab-tags  { display: flex; gap: 6px; flex-shrink: 0; }
+        .tag {
+            display: inline-block; padding: 2px 8px; border-radius: 6px;
+            font-size: 11px; font-weight: 500;
+            background: var(--paper); color: var(--muted);
+        }
+        .tag-siege { background: #e8eef7; color: #2a4a8a; }
+
+        /* Empty */
+        .empty-state { text-align: center; padding: 80px 20px; color: var(--muted); }
+        .empty-state svg { opacity: .15; margin-bottom: 14px; }
+        .empty-state p { font-size: 14px; font-weight: 300; }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <span class="hero-eyebrow">Registre National des Entreprises</span>
+    <h1>Explorez les <em>entreprises</em><br>françaises</h1>
+    <p>Données officielles RNE — SIREN, statuts, adresses et établissements.</p>
+</header>
+
+<div class="search-wrap">
+    <div class="search-box">
+        <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="search-input" autocomplete="off" placeholder="Nom d'entreprise ou SIREN…" disabled>
+        <button id="search-btn" disabled>Rechercher</button>
+    </div>
+</div>
+
+<div id="status">
+    <div class="spinner"></div>
+    <span>Chargement de DuckDB…</span>
+</div>
+
+<div id="output">
+    <div class="empty-state">
+        <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg>
+        <p>Recherchez une entreprise pour afficher sa fiche.</p>
+    </div>
+</div>
+
+<script type="module">
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+
+const statusEl    = document.getElementById('status');
+const searchBtn   = document.getElementById('search-btn');
+const searchInput = document.getElementById('search-input');
+const outputEl    = document.getElementById('output');
+let db, conn;
+
+/* ── Utils ─────────────────────────────────── */
+const esc  = s => s ? String(s).replace(/'/g, "''") : '';
+const dash = v => (v === null || v === undefined || v === '') ? '—' : v;
+
+function getSearchSQL(v, limit = 8) {
+    const s = esc(v);
+    const hasLetters = /[a-zA-Z]/.test(v);
+    const isNumeric  = /^\d+$/.test(v);
+
+    let whereClause = '';
+    if (hasLetters) {
+        whereClause = `u.nom_complet ILIKE '%${s}%'`;
+    } else if (isNumeric) {
+        if (v.length > 9) {
+            whereClause = `e_search.siret LIKE '${s}%'`;
+        } else {
+            whereClause = `u.siren LIKE '${s}%'`;
+        }
+    } else {
+        whereClause = `(u.nom_complet ILIKE '%${s}%' OR u.siren LIKE '${s}%')`;
+    }
+
+    return `
+        SELECT DISTINCT u.nom_complet, u.siren, u.etat_administratif, e_siege.adresse
+        FROM 'unites_legales.parquet' u
+        LEFT JOIN 'etablissements.parquet' e_siege ON u.siren = e_siege.siren AND e_siege.est_siege = true
+        ${isNumeric && v.length > 9 ? "JOIN 'etablissements.parquet' e_search ON u.siren = e_search.siren" : ""}
+        WHERE ${whereClause}
+        LIMIT ${limit}`;
+}
+
+function fmtSiren(s) {
+    return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3') : '—';
+}
+function fmtSiret(s) {
+    return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/, '$1 $2 $3 $4') : '—';
+}
+function badge(code) {
+    return code === 'A'
+        ? '<span class="badge badge-ok">Active</span>'
+        : '<span class="badge badge-ko">Cessée</span>';
+}
+function setStatus(msg, loading = false) {
+    statusEl.innerHTML = loading
+        ? `<div class="spinner"></div><span>${msg}</span>`
+        : `<span>${msg}</span>`;
+}
+
+/* ── Init ──────────────────────────────────── */
+async function init() {
+    try {
+        const bundles = duckdb.getJsDelivrBundles();
+        const bundle  = await duckdb.selectBundle(bundles);
+        const worker  = new Worker(
+            URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }))
+        );
+        db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
+        await db.instantiate(bundle.mainModule);
+        conn = await db.connect();
+
+        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
+        await db.registerFileURL('unites_legales.parquet', `${base}/unites_legales.parquet`, duckdb.DuckDBDataProtocol.HTTP, false);
+        await db.registerFileURL('etablissements.parquet', `${base}/etablissements.parquet`, duckdb.DuckDBDataProtocol.HTTP, false);
+        // Warm up
+        await conn.query("SELECT 1 FROM 'unites_legales.parquet' LIMIT 0");
+        await conn.query("SELECT 1 FROM 'etablissements.parquet' LIMIT 0");
+
+        setStatus('Prêt — recherchez par nom ou SIREN');
+        searchInput.disabled = false;
+        searchBtn.disabled   = false;
+    } catch (err) {
+        setStatus(`Erreur : ${err.message}`);
+        console.error(err);
+    }
+}
+
+/* ── Fetch & Render ────────────────────────── */
+async function searchAndRenderList(query) {
+    setStatus('Recherche…', true);
+    try {
+        const res = await conn.query(getSearchSQL(query, 40));
+        const rows = res.toArray().map(r => r.toJSON());
+
+        if (rows.length === 0) {
+            outputEl.innerHTML = '<div class="empty-state"><p>Aucune entreprise active trouvée.</p></div>';
+        } else if (rows.length === 1) {
+            fetchAndRender(rows[0].siren);
+        } else {
+            renderResultsList(rows);
+        }
+        setStatus('');
+    } catch (err) {
+        setStatus(`Erreur : ${err.message}`);
+        console.error(err);
+    }
+}
+
+function renderResultsList(rows) {
+    outputEl.innerHTML = `
+        <div style="margin-bottom: 16px; font-size: 14px; color: var(--muted);">${rows.length} résultats trouvés</div>
+        <div class="results-grid">
+            ${rows.map(r => `
+                <div class="card result-item" data-siren="${r.siren}" style="cursor:pointer; margin-bottom: 12px;">
+                    <div style="padding: 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="font-family: 'DM Serif Display', serif; font-size: 1.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${r.nom_complet || 'Sans nom'}</div>
+                            <div style="font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; gap: 12px; align-items: center;">
+                                <span style="flex-shrink: 0;">SIREN · ${fmtSiren(r.siren)}</span>
+                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 300;">${r.adresse || ''}</span>
+                            </div>
+                        </div>
+                        ${badge(r.etat_administratif)}
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
+}
+
+async function fetchAndRender(siren) {
+    setStatus('Chargement…', true);
+    try {
+        const s = esc(siren);
+
+        const [ulRes, etRes] = await Promise.all([
+            conn.query(`SELECT * FROM 'unites_legales.parquet' WHERE siren = '${s}' LIMIT 1`),
+            conn.query(`
+                SELECT siret, est_siege, etat_administratif, adresse, latitude, longitude
+                FROM 'etablissements.parquet'
+                WHERE siren = '${s}'
+                ORDER BY est_siege DESC, etat_administratif ASC
+                LIMIT 25`)
+        ]);
+
+        const ul    = ulRes.toArray().map(r => r.toJSON());
+        const etabs = etRes.toArray().map(r => r.toJSON());
+
+        if (!ul.length) {
+            outputEl.innerHTML = '<p style="text-align:center;color:var(--muted);padding:60px 0">Aucune entreprise trouvée.</p>';
+            setStatus('');
+            return;
+        }
+        render(ul[0], etabs);
+        setStatus('');
+    } catch (err) {
+        setStatus(`Erreur : ${err.message}`);
+        console.error(err);
+    }
+}
+
+async function fetchSirenFromSiret(siret) {
+    try {
+        const res = await conn.query(`SELECT siren FROM 'etablissements.parquet' WHERE siret = '${esc(siret)}' LIMIT 1`);
+        const rows = res.toArray().map(r => r.toJSON());
+        return rows.length ? rows[0].siren : null;
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+/* ── Build HTML ────────────────────────────── */
+function render(ul, etabs) {
+    const name  = ul.nom_complet || 'Nom inconnu';
+    const siege = etabs.find(e => e.est_siege) || etabs[0] || null;
+
+    // Key info cells — only show non-empty ones
+    const cells = [
+        { label: 'SIREN',            value: fmtSiren(ul.siren) },
+        { label: 'Nature juridique', value: dash(ul.nature_juridique) },
+        { label: 'Activité (NAF)',   value: dash(ul.activite_principale) },
+        { label: 'SIRET siège',      value: siege ? fmtSiret(siege.siret) : '—' },
+        { label: 'Tranche effectif', value: dash(ul.tranche_effectifs) },
+        { label: 'Catégorie',        value: dash(ul.categorie_entreprise) },
+    ].filter(c => c.value !== '—');
+
+    const addrHtml = siege?.adresse ? `
+        <div class="addr-block">
+            <svg class="addr-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <div>
+                <div class="addr-label">Adresse du siège</div>
+                <div class="addr-value">${siege.adresse}</div>
+            </div>
+        </div>` : '';
+
+    const gridHtml = cells.length ? `
+        <div class="info-grid">
+            ${cells.map(c => `
+                <div class="info-cell">
+                    <div class="info-label">${c.label}</div>
+                    <div class="info-value">${c.value}</div>
+                </div>`).join('')}
+        </div>` : '';
+
+    const etabsHtml = etabs.length ? `
+        <div class="section-title">Établissements · ${etabs.length}</div>
+        <div class="etab-list">
+            ${etabs.map(e => `
+                <div class="etab-item">
+                    <span class="etab-siret">${fmtSiret(e.siret)}</span>
+                    <span class="etab-addr">${e.adresse || '—'}</span>
+                    <span class="etab-tags">
+                        ${e.est_siege ? '<span class="tag tag-siege">Siège</span>' : ''}
+                        ${badge(e.etat_administratif)}
+                    </span>
+                </div>`).join('')}
+        </div>` : '';
+
+    outputEl.innerHTML = `
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">${name}</div>
+                    <div class="card-siren">SIREN · ${fmtSiren(ul.siren)}</div>
+                </div>
+                ${badge(ul.etat_administratif)}
+            </div>
+            ${addrHtml}
+            ${gridHtml}
+            ${etabsHtml}
+        </div>`;
+}
+
+/* ── Events ────────────────────────────────── */
+outputEl.addEventListener('click', e => {
+    const item = e.target.closest('.result-item');
+    if (item) fetchAndRender(item.dataset.siren);
+});
+
+const doSearch = async () => {
+    const v = searchInput.value.trim();
+    if (!v) return;
+    
+    const isNumeric = /^\d+$/.test(v);
+    
+    if (isNumeric) {
+        if (v.length === 9) {
+            fetchAndRender(v);
+        } else if (v.length === 14) {
+            setStatus('Recherche par SIRET…', true);
+            const siren = await fetchSirenFromSiret(v);
+            if (siren) fetchAndRender(siren);
+            else {
+                outputEl.innerHTML = '<div class="empty-state"><p>SIRET non trouvé.</p></div>';
+                setStatus('');
+            }
+        } else {
+            searchAndRenderList(v);
+        }
+    } else {
+        searchAndRenderList(v);
+    }
+};
+searchBtn.addEventListener('click', doSearch);
+searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+});
+
+init();
+</script>
+</body>
+</html>

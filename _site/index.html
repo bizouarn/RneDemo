@@ -332,6 +332,14 @@
             <div class="stat-label">Entrepreneurs Ind.</div>
             <div id="stat-ind" class="stat-value">—</div>
         </div>
+        <div class="stat-card">
+            <div class="stat-label">Org. Formation</div>
+            <div id="stat-of" class="stat-value">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Certif. Qualiopi</div>
+            <div id="stat-quali" class="stat-value">—</div>
+        </div>
     </div>
 
     <div class="chart-row">
@@ -346,8 +354,15 @@
     </div>
 
     <div class="map-wrapper">
-        <h3 style="padding: 12px 12px 0; font-family: 'DM Serif Display', serif;">Carte de densité des établissements (échantillon 50k)</h3>
-        <p style="padding: 0 12px 12px; font-size: 13px; color: var(--muted);">Répartition géographique sur le territoire.</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; padding: 12px 12px 0;">
+            <h3 style="font-family: 'DM Serif Display', serif;">Carte de densité</h3>
+            <select id="map-type-select" style="padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 13px;">
+                <option value="all">Tous les établissements</option>
+                <option value="of">Organismes de Formation</option>
+                <option value="qualiopi">Certifiés Qualiopi</option>
+            </select>
+        </div>
+        <p style="padding: 0 12px 12px; font-size: 13px; color: var(--muted);">Répartition géographique (échantillon 50k).</p>
         <div id="map"></div>
     </div>
 </div>
@@ -435,7 +450,7 @@ async function loadDashboard() {
     setStatus('Chargement des analyses…', true);
     
     try {
-        const [statsUl, statsEt, statsInd, legalRes, statusRes, mapRes] = await Promise.all([
+        const [statsUl, statsEt, statsInd, legalRes, statusRes] = await Promise.all([
             conn.query("SELECT count(*) as c FROM 'unites_legales.parquet'"),
             conn.query("SELECT count(*) as c FROM 'etablissements.parquet'"),
             conn.query("SELECT count(*) as c FROM 'unites_legales.parquet' WHERE est_entrepreneur_individuel = 'True'"),
@@ -445,31 +460,61 @@ async function loadDashboard() {
                 sum(CASE WHEN est_ess = 'True' THEN 1 ELSE 0 END) as ess,
                 sum(CASE WHEN est_societe_mission = 'O' THEN 1 ELSE 0 END) as mission,
                 sum(CASE WHEN est_association = 'True' THEN 1 ELSE 0 END) as assoc,
-                sum(CASE WHEN est_organisme_formation = 'True' THEN 1 ELSE 0 END) as formation
-                FROM 'unites_legales.parquet'`),
-            conn.query("SELECT latitude, longitude FROM 'etablissements.parquet' WHERE latitude IS NOT NULL AND longitude IS NOT NULL USING SAMPLE 50000 ROWS")
+                sum(CASE WHEN est_organisme_formation = 'True' THEN 1 ELSE 0 END) as formation,
+                sum(CASE WHEN est_qualiopi = 'True' THEN 1 ELSE 0 END) as qualiopi,
+                sum(CASE WHEN egapro_renseignee = 'True' THEN 1 ELSE 0 END) as egapro,
+                sum(CASE WHEN est_siae = 'True' THEN 1 ELSE 0 END) as siae
+                FROM 'unites_legales.parquet'`)
         ]);
 
         const getVal = (res) => {
             const rows = res.toArray().map(r => r.toJSON());
             if (rows.length === 0) return 0;
-            // Access by alias 'c' or the first available property
             return rows[0].c !== undefined ? rows[0].c : Object.values(rows[0])[0];
         };
+
+        const statusData = statusRes.toArray().map(r => r.toJSON())[0];
 
         document.getElementById('stat-ul').textContent  = fmtNum(getVal(statsUl));
         document.getElementById('stat-et').textContent  = fmtNum(getVal(statsEt));
         document.getElementById('stat-ind').textContent = fmtNum(getVal(statsInd));
+        document.getElementById('stat-of').textContent  = fmtNum(statusData.formation);
+        document.getElementById('stat-quali').textContent = fmtNum(statusData.qualiopi);
 
         renderLegalChart(legalRes.toArray().map(r => r.toJSON()));
-        renderStatusChart(statusRes.toArray().map(r => r.toJSON())[0]);
-        renderMap(mapRes.toArray().map(r => r.toJSON()));
+        renderStatusChart(statusData);
+        
+        await updateMap('all');
 
         dashboardLoaded = true;
         setStatus('');
     } catch (err) {
         setStatus(`Erreur dashboard : ${err.message}`);
         console.error(err);
+    }
+}
+
+async function updateMap(type) {
+    setStatus('Mise à jour de la carte…', true);
+    let sql = "";
+    if (type === 'all') {
+        sql = "SELECT latitude, longitude FROM 'etablissements.parquet' WHERE latitude IS NOT NULL AND longitude IS NOT NULL USING SAMPLE 50000 ROWS";
+    } else if (type === 'of') {
+        sql = `SELECT e.latitude, e.longitude FROM 'etablissements.parquet' e 
+               JOIN 'unites_legales.parquet' u ON e.siren = u.siren 
+               WHERE u.est_organisme_formation = 'True' AND e.latitude IS NOT NULL USING SAMPLE 50000 ROWS`;
+    } else if (type === 'qualiopi') {
+        sql = `SELECT e.latitude, e.longitude FROM 'etablissements.parquet' e 
+               JOIN 'unites_legales.parquet' u ON e.siren = u.siren 
+               WHERE u.est_qualiopi = 'True' AND e.latitude IS NOT NULL USING SAMPLE 50000 ROWS`;
+    }
+
+    try {
+        const res = await conn.query(sql);
+        renderMap(res.toArray().map(r => r.toJSON()));
+        setStatus('');
+    } catch (e) {
+        setStatus(`Erreur carte : ${e.message}`);
     }
 }
 
@@ -501,10 +546,13 @@ function renderStatusChart(data) {
     new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['ESS', 'Soc. à mission', 'Assoc.', 'Org. Formation'],
+            labels: ['ESS', 'Soc. à mission', 'Assoc.', 'Org. Formation', 'Qualiopi', 'SIAE', 'Egapro (50+)'],
             datasets: [{
-                data: [Number(data.ess), Number(data.mission), Number(data.assoc), Number(data.formation)],
-                backgroundColor: ['#c8522a', '#2a4a8a', '#276b2c', '#b03020'],
+                data: [
+                    Number(data.ess), Number(data.mission), Number(data.assoc), 
+                    Number(data.formation), Number(data.qualiopi), Number(data.siae), Number(data.egapro)
+                ],
+                backgroundColor: ['#c8522a', '#2a4a8a', '#276b2c', '#b03020', '#fbc02d', '#9c27b0', '#1976d2'],
                 borderWidth: 0
             }]
         },
@@ -534,6 +582,10 @@ function renderMap(coords) {
         gradient: {0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1: 'red'}
     }).addTo(map);
 }
+
+document.getElementById('map-type-select').addEventListener('change', (e) => {
+    updateMap(e.target.value);
+});
 
 function initTabs() {
     tabBtns.forEach(btn => {
@@ -676,11 +728,12 @@ function render(ul, etabs) {
     const cells = [
         { label: 'SIREN',            value: fmtSiren(ul.siren) },
         { label: 'Nature juridique', value: LEGAL_LABELS[ul.nature_juridique] || dash(ul.nature_juridique) },
-        { label: 'Activité (NAF)',   value: dash(ul.activite_principale) },
+        { label: 'Nb Établissements', value: dash(ul.nombre_etablissements) },
         { label: 'SIRET siège',      value: siege ? fmtSiret(siege.siret) : '—' },
-        { label: 'Tranche effectif', value: dash(ul.tranche_effectifs) },
-        { label: 'Catégorie',        value: dash(ul.categorie_entreprise) },
-    ].filter(c => c.value !== '—');
+        { label: 'Org. Formation',   value: ul.est_organisme_formation === 'True' ? 'Oui' : 'Non' },
+        { label: 'Certif. Qualiopi', value: ul.est_qualiopi === 'True' ? 'Oui' : 'Non' },
+        { label: 'Index Egapro',      value: ul.egapro_renseignee === 'True' ? 'Renseigné (50+)' : 'Non renseigné' },
+    ];
 
     const addrHtml = siege?.adresse ? `
         <div class="addr-block">

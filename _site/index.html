@@ -339,7 +339,7 @@ async function init() {
 async function searchAndRenderList(query) {
     setStatus('Recherche…', true);
     try {
-        const res = await conn.query(getSearchSQL(query, 40));
+        const res = await conn.query(getSearchSQL(query, 200));
         const rows = res.toArray().map(r => r.toJSON());
 
         if (rows.length === 0) {
